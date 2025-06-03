@@ -4,6 +4,7 @@ import { create } from "../utils";
 Command.register({
     name: "create",
     alt: ["new"],
+    defaultArgs: ["--with-demo"],
     options: [
         "*",
         {
