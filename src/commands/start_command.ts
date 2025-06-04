@@ -3,7 +3,7 @@ import { start } from "../utils";
 
 Command.register({
     name: "start",
-    defaultArgs: ["--with-demo"],
+    defaultArgs: ["--without-demo=False"],
     options: ["*"],
     defaultOption: "addons",
     handler: start,

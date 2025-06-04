@@ -1,0 +1,11 @@
+#!/bin/bash
+current_dir=$(cd -- "$(dirname "$0")" &> /dev/null && cd .. && pwd)
+if
+    ! cmp -s -- "$current_dir/addons/web/tooling/_package.json" ../package.json ||
+    ! cmp -s -- "$current_dir/addons/web/tooling/_eslintignore" ../.eslintignore ||
+    ! cmp -s -- "$current_dir/addons/web/tooling/_eslintrc.json" ../.eslintrc.json
+then
+    echo "[PRE-COMMIT] [WARNING] Some of your config files are out of date. You may want to reload your tooling"
+fi
+echo "[PRE-COMMIT] running in $current_dir"
+bun run lint-staged

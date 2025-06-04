@@ -3,7 +3,7 @@ import { LocalError, R_FULL_MATCH, R_SHORT_MATCH } from "./constants";
 import { logger } from "./logger";
 
 import "./commands/index";
-import { execProcess, listenOnCloseEvents } from "./process";
+import { $, listenOnCloseEvents } from "./process";
 
 const main = async () => {
     listenOnCloseEvents();
@@ -58,7 +58,7 @@ const parseArguments = (args: string[]) => {
 const stopProcessesOnPorts = async (ports: string[]) => {
     const strPorts = [...ports].sort().join(",");
     try {
-        await execProcess(`lsof -ti :${strPorts} | xargs kill -9`);
+        await $`lsof -ti :${strPorts} | xargs kill -9`;
         logger.info(`terminated existing processes listening on port(s): ${strPorts}`);
     } catch {
         // Command failed: (probably) due to no pIds found

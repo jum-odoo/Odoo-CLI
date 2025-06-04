@@ -1,5 +1,5 @@
 import { homedir } from "os";
-import { join } from "path";
+import { join, relative } from "path";
 
 let debug = false;
 
@@ -13,13 +13,17 @@ export function setDebug(value: boolean) {
 
 export class LocalError extends Error {}
 
-export const HOME = homedir();
-export const BIN_PATH = join(HOME, "odoo", "odoo-bin");
+export const ROOT_PATH = join(homedir(), "odoo");
+export const COMMUNITY_PATH = join(ROOT_PATH, "community");
+export const ENTERPRISE_PATH = join(ROOT_PATH, "enterprise");
+
 export const ADDON_PATHS = {
-    community: join(HOME, "odoo", "addons"),
-    ["design-themes"]: join(HOME, "design-themes"),
-    enterprise: join(HOME, "enterprise"),
+    community: join(COMMUNITY_PATH, "addons"),
+    ["design-themes"]: join(ROOT_PATH, "design-themes"),
+    enterprise: ENTERPRISE_PATH,
 };
+export const BIN_PATH = join(COMMUNITY_PATH, "odoo-bin");
+export const SRC_PATH = join("static", "src");
 
 export const MANIFEST_FILE_NAME = "__manifest__.py";
 export const MODULES = {

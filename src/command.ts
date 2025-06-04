@@ -4,7 +4,6 @@ import {
     type CommandOptionDefinition,
 } from "./commands/command_options";
 import { LocalError } from "./constants";
-import { logger } from "./logger";
 import { resolve, Resolver } from "./utils";
 
 export interface CommandDefinition {
@@ -109,7 +108,10 @@ export class Command {
         const args: string[] = (await resolve(this.definition.defaultArgs)) || [];
         for (const option of this.optionList) {
             if (option.definition?.flag) {
-                args.push(option.definition.flag, option.values.join(","));
+                args.push(option.definition.flag);
+            }
+            if (option.values.length) {
+                args.push(option.values.join(","));
             }
         }
 

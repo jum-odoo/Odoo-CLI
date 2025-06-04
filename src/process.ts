@@ -1,5 +1,4 @@
 import { exec, spawn } from "child_process";
-import { LocalError } from "./constants";
 import { logger } from "./logger";
 
 export interface SpawnOptions {
@@ -32,14 +31,16 @@ const onExit = (code: number) => {
 
 const children: ReturnType<typeof spawn>[] = [];
 
-export async function execProcess(command: string): Promise<string> {
-    logger.debug("<execProcess>:", command);
+export async function $(...args: Parameters<typeof String.raw>): Promise<string> {
+    const command = String.raw(...args);
+    logger.debug("<exec>:", command);
     return new Promise((resolve, reject) => {
         exec(command, (error, stdout, stderr) => {
             if (error || stderr) {
                 reject(error || stderr);
+            } else {
+                resolve(stdout.trim());
             }
-            resolve(stdout.trim());
         });
     });
 }
@@ -56,7 +57,7 @@ export function listenOnCloseEvents() {
 }
 
 export function spawnProcess(args: string[], options?: SpawnOptions) {
-    logger.debug("<spawnProcess>", ...args);
+    logger.debug("<spawn>", ...args);
     const { ignoreFail } = options || {};
     const command = args.shift() || "";
     const child = spawn(command, args, { stdio: ignoreFail ? "ignore" : "inherit" });
@@ -66,11 +67,13 @@ export function spawnProcess(args: string[], options?: SpawnOptions) {
     }
     children.push(child);
     return new Promise((resolve, reject) => {
+        child.on("error", (error) => reject(error));
         child.on("exit", (code) => {
             if (code && !ignoreFail) {
-                throw new LocalError(`${JSON.stringify(command)} process exited with code ${code}`);
+                reject(code);
+            } else {
+                resolve(code);
             }
-            resolve(code);
         });
     });
 }

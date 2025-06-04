@@ -5,12 +5,14 @@ import {
     ADDON_PACKS,
     ADDON_PATHS,
     BIN_PATH,
+    COMMUNITY_PATH,
     LocalError,
     MANIFEST_FILE_NAME,
     R_VALID_MODULE_NAME,
 } from "./constants";
 import { logger } from "./logger";
-import { execProcess, spawnProcess } from "./process";
+import { $, spawnProcess } from "./process";
+import { disable, enable, reload } from "./tooling";
 
 export type Resolver<T> = T | (() => T | PromiseLike<T>);
 
@@ -83,7 +85,7 @@ export async function create(command: Command, args: string[]) {
 export async function drop(command: Command, args: string[]) {
     const dbName = command.options.database.values.join(" ");
     logger.info(`dropping database "${dbName}"`);
-    return _drop(command, args);
+    await _drop(command, args);
 }
 
 export async function parseAddons(addonsValue: string[]) {
@@ -118,13 +120,30 @@ export function resolve<T>(value: Resolver<T>): T | Promise<T> {
     return typeof value === "function" ? (value as () => T | Promise<T>)() : value;
 }
 
-export function start(command: Command, args: string[]) {
+export async function start(command: Command, args: string[]) {
     const dbName = command.options.database.values.join(" ");
     logger.info(`starting database "${dbName}"`);
-    return _start(command, args);
+    await _start(command, args);
+}
+
+export async function tooling(command: Command, args: string[]) {
+    const mode = command.options.mode.values.join(" ");
+    switch (mode) {
+        case "disable":
+        case "off": {
+            return disable();
+        }
+        case "enable":
+        case "on": {
+            return enable();
+        }
+        default: {
+            return reload();
+        }
+    }
 }
 
 export async function getDefaultDbName() {
-    const branch = await execProcess("cd ~/odoo && git rev-parse --abbrev-ref HEAD");
+    const branch = await $`cd ${COMMUNITY_PATH} && git rev-parse --abbrev-ref HEAD`;
     return [branch.match(R_BRANCH_DATABASE)?.[1] || "dev"];
 }
