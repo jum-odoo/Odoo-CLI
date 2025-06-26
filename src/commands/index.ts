@@ -1,6 +1,8 @@
 // Commands
 import "./create_command";
+import "./database_command";
 import "./drop_command";
+import "./memory_command";
 import "./shell_command";
 import "./start_command";
 import "./test_command";

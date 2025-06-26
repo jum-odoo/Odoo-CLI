@@ -52,15 +52,23 @@ const getValidAddons = async () => {
     return values.flat();
 };
 
+const warnError = (error: any) => logger.warn(formatError(error));
+
 const _drop = async (command: Command, args: string[]) => {
-    await spawnProcess(["dropdb", "-f", ...command.options.database.values], { ignoreFail: true });
+    const dbNames = command.options.database.values;
+    await Promise.all(dbNames.map((dbName) => $`dropdb -f ${dbName}`.catch(warnError)));
 };
 
-const _start = async (command: Command, args: string[]) => {
-    await spawnProcess(["python3", BIN_PATH, ...args]);
+const _start = (command: Command, args: string[]) => {
+    spawnProcess(["python3", BIN_PATH, ...args]);
 };
 
 const R_BRANCH_DATABASE = /^(\d+\.\d|saas-\d+\.\d|master)/;
+const R_WHITE_SPACE = /\s+/g;
+
+const DOUBLE_QUOTES = `"`;
+const SINGLE_QUOTE = "'";
+const BACKTICK = "`";
 
 const registeredModules: Record<string, string[]> = Object.create(null);
 
@@ -75,17 +83,45 @@ export async function create(command: Command, args: string[]) {
     await _drop(command, args);
     if (command.options.start) {
         // Autostart
-        await _start(command, args);
+        _start(command, args);
     } else {
         // Create
-        await spawnProcess(["createdb", ...command.options.database.values], { ignoreFail: true });
+        await $`createdb ${command.options.database.values.join(" ")}`.catch(warnError);
     }
 }
 
+export async function database(command: Command, args: string[]) {
+    const port = command.options.port.values.join(" ");
+    _start(command, args);
+    logger.info("Opening database manager");
+    await $`open http://127.0.0.1:${port}/web/database/manager`;
+}
+
 export async function drop(command: Command, args: string[]) {
-    const dbName = command.options.database.values.join(" ");
-    logger.info(`dropping database "${dbName}"`);
+    const dbNames = command.options.database.values.map(stringify);
+    logger.info(`dropping ${plural("database", dbNames.length)} ${dbNames.join(", ")}`);
     await _drop(command, args);
+}
+
+export function formatError(error: Error | string | null) {
+    let message: string;
+    if (error instanceof Error) {
+        message = String(error.message);
+    } else {
+        message = String(error ?? "error");
+    }
+    return message
+        .split("\n")
+        .map((line) => {
+            const trimmedLine = line.trim();
+            if (trimmedLine.startsWith("Command failed:")) {
+                return "";
+            } else {
+                return trimmedLine.replaceAll(R_WHITE_SPACE, " ");
+            }
+        })
+        .filter(Boolean)
+        .join("\n");
 }
 
 export async function parseAddons(addonsValue: string[]) {
@@ -116,6 +152,10 @@ export async function parseAddons(addonsValue: string[]) {
     return addons;
 }
 
+export function plural(word: string, count: number, suffix = "s") {
+    return count === 1 ? word : word + suffix;
+}
+
 export function resolve<T>(value: Resolver<T>): T | Promise<T> {
     return typeof value === "function" ? (value as () => T | Promise<T>)() : value;
 }
@@ -123,7 +163,18 @@ export function resolve<T>(value: Resolver<T>): T | Promise<T> {
 export async function start(command: Command, args: string[]) {
     const dbName = command.options.database.values.join(" ");
     logger.info(`starting database "${dbName}"`);
-    await _start(command, args);
+    _start(command, args);
+}
+
+export function stringify(value: any) {
+    const strValue = String(value);
+    if (strValue.includes(DOUBLE_QUOTES)) {
+        if (strValue.includes(SINGLE_QUOTE)) {
+            return BACKTICK + strValue + BACKTICK;
+        }
+        return SINGLE_QUOTE + strValue + SINGLE_QUOTE;
+    }
+    return DOUBLE_QUOTES + strValue + DOUBLE_QUOTES;
 }
 
 export async function tooling(command: Command, args: string[]) {
@@ -131,14 +182,17 @@ export async function tooling(command: Command, args: string[]) {
     switch (mode) {
         case "disable":
         case "off": {
-            return disable();
+            await disable();
+            break;
         }
         case "enable":
         case "on": {
-            return enable();
+            await enable();
+            break;
         }
         default: {
-            return reload();
+            await reload();
+            break;
         }
     }
 }

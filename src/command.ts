@@ -20,7 +20,15 @@ export type CommandHandler = (command: Command, args: string[]) => any;
 export class Command {
     static definitions: Map<string, CommandDefinition> = new Map();
 
-    static find(name: string) {
+    static find(args: string[]) {
+        const firstNonOptionIndex = args.findIndex((arg) => !arg.startsWith("-"));
+        let name;
+        if (firstNonOptionIndex < 0) {
+            name = "start";
+        } else {
+            [name] = args.splice(firstNonOptionIndex, 1);
+            name = name.toLowerCase();
+        }
         const commandDefinition =
             this.definitions.get(name) ||
             [...this.definitions.values()].find((desc) => desc.alt?.includes(name));
@@ -85,22 +93,23 @@ export class Command {
     }
 
     registerOption(optionName: string, type: CommandOptionType) {
-        if (!(optionName in this.options)) {
-            const optionDefinition = this.definition.options?.find((option) => {
-                if (type === "short") {
-                    return option.short === optionName;
-                } else {
-                    return option.name === optionName || option.alt?.includes(optionName);
-                }
-            });
-            if (!optionDefinition) {
-                throw new LocalError(
-                    `unknown option: "${optionName}" with command "${this.definition.name}"`
-                );
+        const lower = optionName.toLowerCase();
+        const optionDefinition = this.definition.options?.find((option) => {
+            if (type === "short") {
+                return option.short === lower;
+            } else {
+                return option.name === lower || option.alt?.includes(lower);
             }
-            this.options[optionName] = new CommandOption(optionDefinition, type);
+        });
+        if (!optionDefinition) {
+            throw new LocalError(
+                `unknown option: "${lower}" with command "${this.definition.name}"`
+            );
         }
-        return this.options[optionName];
+        if (!(optionDefinition.name in this.options)) {
+            this.options[optionDefinition.name] = new CommandOption(optionDefinition, type);
+        }
+        return this.options[optionDefinition.name];
     }
 
     async run() {

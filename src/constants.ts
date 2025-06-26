@@ -48,6 +48,6 @@ export const ADDON_PACKS: Record<string, string[]> = {
     sales: [MODULES.CRM, MODULES.PROJECT, MODULES.WEBSITE, MODULES.SALE_SUBSCRIPTION],
 };
 
-export const R_FULL_MATCH = /^--(\w+)/;
-export const R_SHORT_MATCH = /^-(\w+)/;
+export const R_FULL_MATCH = /^--(?<name>[\w-]+)/;
+export const R_SHORT_MATCH = /^-(?<names>[\w-]+)/;
 export const R_VALID_MODULE_NAME = /^[a-z][\w-]*$/;

@@ -8,7 +8,7 @@ import { $, listenOnCloseEvents } from "./process";
 const main = async () => {
     listenOnCloseEvents();
 
-    const processArgs = process.argv.slice(2).flatMap((arg) => arg.toLowerCase().split("="));
+    const processArgs = process.argv.slice(2).flatMap((arg) => arg.split("="));
     const command = parseArguments(processArgs);
 
     await command.processOptions();
@@ -26,13 +26,15 @@ const main = async () => {
 
 const parseArguments = (args: string[]) => {
     const remainingValues: string[] = [];
-    const command = Command.find(args.shift() || "start");
+    const command = Command.find(args);
     for (const arg of args) {
         let match;
-        if ((match = arg.match(R_SHORT_MATCH))) {
-            command.registerOption(match[1], "short");
-        } else if ((match = arg.match(R_FULL_MATCH))) {
-            command.registerOption(match[1], "long");
+        if ((match = arg.match(R_FULL_MATCH))) {
+            command.registerOption(match.groups!.name, "long");
+        } else if ((match = arg.match(R_SHORT_MATCH))) {
+            for (const shortOption of match.groups!.names.split("")) {
+                command.registerOption(shortOption, "short");
+            }
         } else {
             const lastOption = command.lastOption;
             if (lastOption?.acceptsValues) {

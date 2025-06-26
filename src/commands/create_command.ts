@@ -11,6 +11,6 @@ Command.register({
             start: { standalone: true },
         },
     ],
-    defaultOption: "addons",
+    defaultOption: "database",
     handler: create,
 });

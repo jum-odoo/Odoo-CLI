@@ -4,7 +4,6 @@ import { drop } from "../utils";
 Command.register({
     name: "drop",
     options: [
-        "debug",
         {
             database: {
                 defaultValues: undefined,
@@ -12,5 +11,6 @@ Command.register({
             },
         },
     ],
+    defaultOption: "database",
     handler: drop,
 });

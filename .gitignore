@@ -1,3 +1,7 @@
+# Temporary memory data files
+
+memory_data/output/*
+
 # Logs
 logs
 *.log
