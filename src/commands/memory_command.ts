@@ -23,6 +23,9 @@ Command.register({
             ["logs-dir"]: {
                 defaultValues: ["memory_data", "logs"],
             },
+            metric: {
+                defaultValues: ["used"], // accepted values: "time", "used", "total", "limit", "tests"
+            },
             mobile: {
                 short: "m",
                 standalone: true,
@@ -39,6 +42,10 @@ Command.register({
             },
             sources: {
                 defaultValues: ["memory_data", "data_sources.ini"],
+            },
+            variance: {
+                short: "v",
+                standalone: true,
             },
         },
     ],

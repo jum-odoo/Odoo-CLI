@@ -118,9 +118,9 @@ export class Command {
         for (const option of this.optionList) {
             if (option.definition?.flag) {
                 args.push(option.definition.flag);
-            }
-            if (option.values.length) {
-                args.push(option.values.join(","));
+                if (option.values.length) {
+                    args.push(option.values.join(","));
+                }
             }
         }
 

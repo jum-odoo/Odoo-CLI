@@ -141,6 +141,16 @@ CommandOption.register({
 });
 
 CommandOption.register({
+    name: "login",
+});
+
+CommandOption.register({
+    name: "open",
+    short: "o",
+    standalone: true,
+});
+
+CommandOption.register({
     name: "port",
     short: "p",
     flag: "--http-port",

@@ -69,31 +69,63 @@ function labelToFileName(label: string) {
 
 function parseSourceContents(
     sourceContents: [label: string, content: string][],
-    allowMobile: boolean
+    options: {
+        metric: string;
+        showMobile?: boolean;
+        variance?: boolean;
+    }
 ) {
-    const data: Record<string, [label: string, used: number][]> = {};
+    if (!ACCEPTED_METRICS.includes(options.metric)) {
+        throw new LocalError(
+            `Unrecognized metric "${options.metric}": accepted metrics are ${ACCEPTED_METRICS.join(
+                ", "
+            )}`
+        );
+    }
+    const data: Record<string, [label: string, value: number][]> = {};
     for (const [label, content] of sourceContents) {
         // Prepare source content
         const formattedContent = content
             .replaceAll(/(^.*?\[MEMINFO\] @.*$\n)|(^.*$\n)/gm, "$1")
             .replaceAll(/[,"]/gm, "")
-            .replaceAll(R_MEMINFO, "$<label>,$<used>,$<suite>");
+            .replaceAll(R_MEMINFO, `$<label>,$<${options.metric}>,$<suite>`);
 
         // Map & filter rows
-        const rows: [label: string, used: number][] = [];
+        const rows: [label: string, value: number][] = [];
+        let timeRef = 0;
+        let prevValue = 0;
         for (const line of formattedContent.split("\n")) {
-            let [suiteLabel, used, suite] = line.split(",");
-            if (!suiteLabel) {
+            let [suiteLabel, value, suite] = line.split(",");
+            if (!suiteLabel || !value) {
                 continue;
             }
-            const isMobile = suite === MOBILE_SUITE;
-            if (isMobile) {
-                if (!allowMobile) {
+            if (suite === MOBILE_SUITE) {
+                if (!options.showMobile) {
                     continue;
                 }
                 suiteLabel = `${suiteLabel} (mobile)`;
             }
-            rows.push([suiteLabel, Number(used)]);
+            let parsedValue: number;
+            if (options.metric === "time") {
+                const ts = getSqlTimeStamp(value);
+                if (timeRef) {
+                    parsedValue = ts - timeRef;
+                } else {
+                    timeRef = ts;
+                    parsedValue = 0;
+                }
+            } else {
+                parsedValue = Number(value);
+            }
+            if (options.variance) {
+                if (prevValue) {
+                    [parsedValue, prevValue] = [Math.abs(parsedValue - prevValue), parsedValue];
+                } else {
+                    prevValue = parsedValue;
+                    parsedValue = 0;
+                }
+            }
+            rows.push([suiteLabel, parsedValue]);
         }
         if (rows.length) {
             logger.debug("Got", rows.length, "memory reading from source:", label);
@@ -140,12 +172,24 @@ async function parseSourceFile(sourceFilePath: string) {
     return sources;
 }
 
+function getSqlTimeStamp(value: string) {
+    const [date, time] = value.trim().split(/\s+/);
+    const [h, m, _s] = time.split(":");
+    const s = _s.slice(0, 2);
+    const ms = _s.slice(2).padEnd(3, "0");
+
+    const isoString = `${date}T${h}:${m}:${s}.${ms}`;
+
+    return Number(new Date(isoString));
+}
+
 function unquote(string: string) {
     return R_DOUBLE_QUOTES.test(string) || R_SINGLE_QUOTES.test(string)
         ? string.slice(1, -1)
         : string;
 }
 
+const ACCEPTED_METRICS = ["time", "used", "total", "limit", "tests"];
 const MOBILE_SUITE = ".MobileWebSuite";
 
 const R_BUILD_NAME = /build\/(.*)\/logs/g;
@@ -154,7 +198,7 @@ const R_ESCAPED_FILE_NAME_SEPARATOR = /[\s.\/:;#@-]+/g;
 const R_FILE_EXTENSION = /\.\w+$/;
 const R_LABEL_SEPARATOR = /\s*=\s*/;
 const R_MEMINFO =
-    /.*(?<suite>\.(Mobile)?WebSuite).*: \[MEMINFO\] (?<label>.+) \(after GC\) - used: (?<used>\d+) - total: (?<total>\d+) - limit: (?<limit>\d+)( - tests: (?<tests>\d+))?.*/gm;
+    /(?<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d+(,\d+)?).*(?<suite>\.(Mobile)?WebSuite).*: \[MEMINFO\] (?<label>.+) \(after GC\) - used: (?<used>\d+) - total: (?<total>\d+) - limit: (?<limit>\d+)( - tests: (?<tests>\d+))?.*/gm;
 const R_NON_ALPHANUM = /\W/g;
 const R_SINGLE_QUOTES = /^'.*'$/;
 const R_SOURCE_COMMENT = /^[#;]/;
@@ -205,7 +249,11 @@ export async function parseMemoryLogs({ options }: Command, args: string[]) {
     // Fetch file sources (remotely or locally)
     logger.info("Parsing memory data from", sourceEntries.length, "sources");
     const sourceContents = await fetchSourceContents(sourceEntries, logsDir);
-    const data = parseSourceContents(sourceContents, !!options.mobile);
+    const data = parseSourceContents(sourceContents, {
+        metric: options.metric.values[0],
+        showMobile: !!options.mobile,
+        variance: !!options.variance,
+    });
 
     // generate csv and json file
     const csv: Record<string, string[]> = {};
@@ -215,12 +263,12 @@ export async function parseMemoryLogs({ options }: Command, args: string[]) {
     const jsonData: Record<string, Record<string, number>> = {};
     for (const [label, rows] of Object.entries(data)) {
         for (const row of rows) {
-            const [suite, used] = row;
+            const [suite, value] = row;
             jsonData[suite] ||= {};
-            jsonData[suite][label] = used;
+            jsonData[suite][label] = value;
             if (options.csv) {
                 csv[suite] ||= [];
-                csv[suite].push(String(used));
+                csv[suite].push(String(value));
             }
         }
     }

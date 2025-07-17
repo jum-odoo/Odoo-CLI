@@ -16,7 +16,12 @@ import { disable, enable, reload } from "./tooling";
 
 export type Resolver<T> = T | (() => T | PromiseLike<T>);
 
-const getPathModules = async (path: string) => {
+function getCsrfTokenFromHtml(html: string) {
+    const match = html.match(R_CSRF_TOKEN);
+    return match?.groups?.token || null;
+}
+
+async function getPathModules(path: string) {
     const pathModules: Set<string> = new Set();
     const items = await readdir(path);
     await Promise.all(
@@ -37,9 +42,9 @@ const getPathModules = async (path: string) => {
         })
     );
     return [...pathModules].sort();
-};
+}
 
-const getValidAddons = async () => {
+async function getValidAddons() {
     let values = Object.values(registeredModules);
     if (!values.length) {
         await Promise.all(
@@ -50,25 +55,55 @@ const getValidAddons = async () => {
         values = Object.values(registeredModules);
     }
     return values.flat();
-};
+}
 
-const warnError = (error: any) => logger.warn(formatError(error));
+function warnError(error: any) {
+    return logger.warn(formatError(error));
+}
 
-const _drop = async (command: Command, args: string[]) => {
+async function _drop(command: Command, args: string[]) {
     const dbNames = command.options.database.values;
     await Promise.all(dbNames.map((dbName) => $`dropdb -f ${dbName}`.catch(warnError)));
-};
+}
 
-const _start = (command: Command, args: string[]) => {
+async function _start(command: Command, args: string[]) {
+    const [port] = command.options.port.values;
     spawnProcess(["python3", BIN_PATH, ...args]);
-};
-
-const R_BRANCH_DATABASE = /^(\d+\.\d|saas-\d+\.\d|master)/;
-const R_WHITE_SPACE = /\s+/g;
+    if (command.options.login) {
+        const login = command.options.login.values.join(" ");
+        setTimeout(async () => {
+            const getResponse = await fetch(`${LOCAL_HOST}:${port}/web/login`, { method: "GET" });
+            const text = await getResponse.text();
+            const csrfToken = getCsrfTokenFromHtml(text);
+            const data = new FormData();
+            data.set("login", login);
+            data.set("password", login);
+            data.set("csrf_token", csrfToken);
+            data.set("type", "password");
+            data.set("redirect", "/odoo");
+            logger.debug("Sending login request with:", Object.fromEntries(data.entries()));
+            const postResponse = await fetch(`${LOCAL_HOST}:${port}/web/login`, {
+                method: "POST",
+                body: data,
+                headers: getResponse.headers,
+            });
+            logger.info(postResponse);
+        }, 1000);
+    }
+    if (command.options.open) {
+        const [port] = command.options.port.values;
+        await $`open ${LOCAL_HOST}:${port}/web?debug=assets`;
+    }
+}
 
 const DOUBLE_QUOTES = `"`;
+const LOCAL_HOST = "http://127.0.0.1";
 const SINGLE_QUOTE = "'";
 const BACKTICK = "`";
+
+const R_BRANCH_DATABASE = /^(\d+\.\d|saas-\d+\.\d|master)/;
+const R_CSRF_TOKEN = /csrf_token\s*:\s*['"`](?<token>\w+)['"`]/im;
+const R_WHITE_SPACE = /\s+/g;
 
 const registeredModules: Record<string, string[]> = Object.create(null);
 
@@ -86,15 +121,15 @@ export async function create(command: Command, args: string[]) {
         _start(command, args);
     } else {
         // Create
-        await $`createdb ${command.options.database.values.join(" ")}`.catch(warnError);
+        await $`createdb ${dbName}`.catch(warnError);
     }
 }
 
 export async function database(command: Command, args: string[]) {
-    const port = command.options.port.values.join(" ");
+    const [port] = command.options.port.values;
     _start(command, args);
     logger.info("Opening database manager");
-    await $`open http://127.0.0.1:${port}/web/database/manager`;
+    await $`open ${LOCAL_HOST}:${port}/web/database/manager`;
 }
 
 export async function drop(command: Command, args: string[]) {
