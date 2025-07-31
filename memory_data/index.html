@@ -3,15 +3,59 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
-        <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
-
+        <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+        <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8" defer></script>
+        <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom" defer></script>
         <script src="./output/data.js" defer></script>
-        <script src="./memory_graph.js" defer></script>
-        <title>Memory chart</title>
+        <script src="./main.js" defer></script>
+        <title>Log Graph</title>
+        <style>
+            .flex {
+                display: flex;
+            }
+
+            .items-center {
+                align-items: center;
+            }
+
+            .gap-1 {
+                gap: 0.25rem;
+            }
+            .gap-2 {
+                gap: 0.5rem;
+            }
+            .gap-3 {
+                gap: 1rem;
+            }
+        </style>
     </head>
     <body>
-        <canvas id="myChart"></canvas>
+        <header class="flex items-center gap-3">
+            <label class="flex items-center gap-1">
+                Metric
+                <select name="metric" id="metric">
+                    <option value="used" selected>Memory used</option>
+                    <option value="time">Time</option>
+                    <option value="total">Memory total</option>
+                    <option value="limit">Memory limit</option>
+                    <option value="tests">Number of tests</option>
+                </select>
+            </label>
+            <label class="flex items-center">
+                Desktop
+                <input type="checkbox" name="desktop" id="desktop" checked />
+            </label>
+            <label class="flex items-center">
+                Mobile
+                <input type="checkbox" name="mobile" id="mobile" />
+            </label>
+            <label class="flex items-center">
+                Show variance
+                <input type="checkbox" name="variance" id="variance" />
+            </label>
+        </header>
+        <main>
+            <canvas id="myChart"></canvas>
+        </main>
     </body>
 </html>

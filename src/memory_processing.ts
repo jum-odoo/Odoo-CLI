@@ -5,6 +5,17 @@ import { LocalError } from "./constants";
 import { logger } from "./logger";
 import { $ } from "./process";
 
+interface RowValues {
+    isMobile: boolean;
+    label: string;
+    limit: number;
+    suite: string;
+    tests: number;
+    time: number;
+    total: number;
+    used: number;
+}
+
 async function clearDirectories(...directories: string[]) {
     await Promise.all(
         directories.map(async (dir) => {
@@ -18,11 +29,11 @@ async function clearDirectories(...directories: string[]) {
 
 async function editMemorySources(sourceFilePath: string) {
     try {
-        await $`code ${sourceFilePath}`;
+        await $`codium ${sourceFilePath}`;
         return;
     } catch {}
     try {
-        await $`codium ${sourceFilePath}`;
+        await $`code ${sourceFilePath}`;
         return;
     } catch {}
     try {
@@ -67,65 +78,33 @@ function labelToFileName(label: string) {
     );
 }
 
-function parseSourceContents(
-    sourceContents: [label: string, content: string][],
-    options: {
-        metric: string;
-        showMobile?: boolean;
-        variance?: boolean;
-    }
-) {
-    if (!ACCEPTED_METRICS.includes(options.metric)) {
-        throw new LocalError(
-            `Unrecognized metric "${options.metric}": accepted metrics are ${ACCEPTED_METRICS.join(
-                ", "
-            )}`
-        );
-    }
-    const data: Record<string, [label: string, value: number][]> = {};
+function parseSourceContents(sourceContents: [label: string, content: string][]) {
+    const data: Record<string, RowValues[]> = {};
     for (const [label, content] of sourceContents) {
         // Prepare source content
         const formattedContent = content
             .replaceAll(/(^.*?\[MEMINFO\] @.*$\n)|(^.*$\n)/gm, "$1")
             .replaceAll(/[,"]/gm, "")
-            .replaceAll(R_MEMINFO, `$<label>,$<${options.metric}>,$<suite>`);
+            .replaceAll(R_MEMINFO, `$<label>,$<suite>,$<time>,$<used>,$<total>,$<limit>,$<tests>`);
 
         // Map & filter rows
-        const rows: [label: string, value: number][] = [];
-        let timeRef = 0;
-        let prevValue = 0;
+        const rows: RowValues[] = [];
         for (const line of formattedContent.split("\n")) {
-            let [suiteLabel, value, suite] = line.split(",");
-            if (!suiteLabel || !value) {
+            const [suiteLabel, suite, time, used, total, limit, tests] = line.split(",");
+            if (!suiteLabel) {
                 continue;
             }
-            if (suite === MOBILE_SUITE) {
-                if (!options.showMobile) {
-                    continue;
-                }
-                suiteLabel = `${suiteLabel} (mobile)`;
-            }
-            let parsedValue: number;
-            if (options.metric === "time") {
-                const ts = getSqlTimeStamp(value);
-                if (timeRef) {
-                    parsedValue = ts - timeRef;
-                } else {
-                    timeRef = ts;
-                    parsedValue = 0;
-                }
-            } else {
-                parsedValue = Number(value);
-            }
-            if (options.variance) {
-                if (prevValue) {
-                    [parsedValue, prevValue] = [Math.abs(parsedValue - prevValue), parsedValue];
-                } else {
-                    prevValue = parsedValue;
-                    parsedValue = 0;
-                }
-            }
-            rows.push([suiteLabel, parsedValue]);
+            const values: RowValues = {
+                isMobile: suite === MOBILE_SUITE,
+                label,
+                limit: Number(limit),
+                suite: suiteLabel === MOBILE_SUITE ? suiteLabel + " (mobile)" : suiteLabel,
+                tests: Number(tests),
+                time: getSqlTimeStamp(time),
+                total: Number(total),
+                used: Number(used),
+            };
+            rows.push(values);
         }
         if (rows.length) {
             logger.debug("Got", rows.length, "memory reading from source:", label);
@@ -189,7 +168,6 @@ function unquote(string: string) {
         : string;
 }
 
-const ACCEPTED_METRICS = ["time", "used", "total", "limit", "tests"];
 const MOBILE_SUITE = ".MobileWebSuite";
 
 const R_BUILD_NAME = /build\/(.*)\/logs/g;
@@ -249,31 +227,24 @@ export async function parseMemoryLogs({ options }: Command, args: string[]) {
     // Fetch file sources (remotely or locally)
     logger.info("Parsing memory data from", sourceEntries.length, "sources");
     const sourceContents = await fetchSourceContents(sourceEntries, logsDir);
-    const data = parseSourceContents(sourceContents, {
-        metric: options.metric.values[0],
-        showMobile: !!options.mobile,
-        variance: !!options.variance,
-    });
+    const data = parseSourceContents(sourceContents);
 
     // generate csv and json file
     const csv: Record<string, string[]> = {};
     if (options.csv) {
         csv["Suite"] = Object.keys(data);
     }
-    const jsonData: Record<string, Record<string, number>> = {};
-    for (const [label, rows] of Object.entries(data)) {
-        for (const row of rows) {
-            const [suite, value] = row;
-            jsonData[suite] ||= {};
-            jsonData[suite][label] = value;
+    const jsonData: RowValues[] = [];
+    for (const rows of Object.values(data)) {
+        for (const values of rows) {
+            jsonData.push(values);
             if (options.csv) {
-                csv[suite] ||= [];
-                csv[suite].push(String(value));
+                csv[values.suite] ||= [];
+                csv[values.suite].push(...Object.values(values).map(String));
             }
         }
     }
-    const jsonDataList = Object.entries(jsonData).map(([suite, data]) => ({ suite, ...data }));
-    const stringifiedData = JSON.stringify(jsonDataList, null, 4);
+    const stringifiedData = JSON.stringify(jsonData, null, 4);
     const jsDest = join(outputDir, "data.js");
     const jsContent = /* js */ `((win) => { win.LOG_DATA = ${stringifiedData}; })(window.top);`;
     logger.debug("Writing JS data to:", jsDest);

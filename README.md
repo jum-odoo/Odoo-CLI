@@ -38,3 +38,9 @@ Run client unit tests from the server
 ```bash
 odoo test .test_unit_desktop
 ```
+
+Edit memory log sources and generate memory graph from a list of runbot links
+```bash
+odoo memory edit # paste links on each line in the file
+odoo memory --open
+```
